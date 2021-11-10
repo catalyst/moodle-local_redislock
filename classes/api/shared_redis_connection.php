@@ -56,20 +56,10 @@ class shared_redis_connection {
     private $factorycount;
 
     /**
-     * @var boolean
-     */
-    private $logging;
-
-    /**
      * Singleton constructor.
      */
     private function __construct() {
         $this->factorycount = 0;
-        // Logging enabled only for CLI, web gets damaged by lock logs.
-        $this->logging = (CLI_SCRIPT && debugging() && !PHPUNIT_TEST);
-        if (isset($CFG->local_redislock_logging)) {
-            $this->logging = $this->logging && ((bool) $CFG->local_redislock_logging);
-        }
     }
 
     /**
@@ -103,7 +93,6 @@ class shared_redis_connection {
         if (!is_null($this->redis) && $this->redis->isConnected()) {
             $this->redis->close();
             $this->redis = null;
-            $this->log("Shared Redis connection is closed.");
         }
     }
 
@@ -136,16 +125,5 @@ class shared_redis_connection {
      */
     public function get_factory_count() {
         return $this->factorycount;
-    }
-
-    /**
-     * Log message
-     *
-     * @param $message
-     */
-    private function log($message) {
-        if ($this->logging) {
-            mtrace(sprintf('Redis lock; pid=%d; %s', getmypid(), $message));
-        }
     }
 }
