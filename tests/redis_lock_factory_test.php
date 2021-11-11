@@ -37,14 +37,16 @@ use local_redislock\api\shared_redis_connection;
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-class local_redislock_redis_lock_factory_test extends \advanced_testcase {
+class redis_lock_factory_test extends \advanced_testcase {
 
     public function setUp(): void {
         global $CFG;
 
         $this->resetAfterTest();
-        if (empty($CFG->local_redislock_redis_server)) {
+        if (empty($CFG->phpunit_local_redislock_redis_server)) {
             $CFG->local_redislock_redis_server = '127.0.0.1';
+        } else {
+            $CFG->local_redislock_redis_server = $CFG->phpunit_local_redislock_redis_server;
         }
         $CFG->lock_factory = '\\local_redislock\\lock\\redis_lock_factory';
     }
@@ -249,6 +251,18 @@ class local_redislock_redis_lock_factory_test extends \advanced_testcase {
      * @return bool
      */
     protected function is_redis_available() {
-        return defined('LOCAL_REDISLOCK_REDIS_LOCK_TEST') && LOCAL_REDISLOCK_REDIS_LOCK_TEST;
+        if (defined('LOCAL_REDISLOCK_REDIS_LOCK_TEST') && LOCAL_REDISLOCK_REDIS_LOCK_TEST) {
+            return true;
+        }
+
+        try {
+            $redislockfactory = new \local_redislock\lock\redis_lock_factory('can_we_do_it');
+            $redis = shared_redis_connection::get_instance()->get_redis();
+            $connected = $redis->isConnected();
+            $redislockfactory->auto_release();
+            return $connected;
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 }
