@@ -101,14 +101,14 @@ class redis_lock_factory implements lock_factory {
             // If a Redis instance is set, we shouldn't share it as we don't know who else is using it.
             $this->shareconnection = false;
         }
+        $this->redis   = $redis;
         if (is_null($logging)) {
             // Logging enabled only for CLI, web gets damaged by lock logs.
             $logging = (CLI_SCRIPT && debugging() && !PHPUNIT_TEST);
             if (isset($CFG->local_redislock_logging)) {
-                $logging = $this->logging && ((bool) $CFG->local_redislock_logging);
+                $logging = $logging && ((bool) $CFG->local_redislock_logging);
             }
         }
-        $this->redis   = $redis;
         $this->logging = $logging;
 
         if (!PHPUNIT_TEST) {
@@ -183,7 +183,7 @@ class redis_lock_factory implements lock_factory {
             $this->redis = $this->bootstrap_redis();
         }
 
-        $this->log('Waiting to get '.$resource.' lock');
+        $this->debug('Waiting to get '.$resource.' lock');
 
         $exception = false;
         $locked = false;
@@ -211,18 +211,18 @@ class redis_lock_factory implements lock_factory {
 
         if (!$locked && $exception) {
             // Error and return.
-            $this->log("Could not get lock on {$resource}. Got exception while trying: {$e->getMessage()}");
+            $this->debug("Could not get lock on {$resource}. Got exception while trying: {$e->getMessage()}");
             return false;
         }
 
         if ($locked) {
-            $this->log('Obtained '.$resource.' lock with value '.$this->get_lock_value());
+            $this->debug('Obtained '.$resource.' lock with value '.$this->get_lock_value());
 
             $lock = new lock($resource, $this);
             $this->openlocks[$resource] = $lock;
             return $lock;
         }
-        $this->log('Lock timeout, did not obtain '.$resource.' lock');
+        $this->debug('Lock timeout, did not obtain '.$resource.' lock');
 
         return false;
     }
@@ -275,7 +275,7 @@ class redis_lock_factory implements lock_factory {
                 $unlocked = $this->redis->del($resource);
 
                 if ($unlocked) {
-                    $this->log('Released '.$resource.' lock');
+                    $this->debug('Released '.$resource.' lock');
                 } else {
                     $this->log('Failed to release '.$resource.' lock');
                 }
@@ -316,7 +316,7 @@ class redis_lock_factory implements lock_factory {
      * Auto release any open locks on shutdown.
      */
     public function auto_release() {
-        $this->log('Auto-release called, releasing '.count($this->openlocks).' locks');
+        $this->debug('Auto-release called, releasing '.count($this->openlocks).' locks');
 
         // Called from the shutdown handler. Must release all open locks.
         foreach ($this->openlocks as $lock) {
@@ -328,11 +328,12 @@ class redis_lock_factory implements lock_factory {
             $this->redis->close();
             self::$conncount--;
             $conncount = self::$conncount;
-            $this->log("Connection to Redis from factory type {$this->type} is closed, {$conncount} remaining.");
+            $this->debug("Connection to Redis from factory type {$this->type} is closed, {$conncount} remaining.");
         } else {
             shared_redis_connection::get_instance()->remove_factory();
             if (empty(shared_redis_connection::get_instance()->get_factory_count())) {
                 shared_redis_connection::get_instance()->close();
+                $this->debug("Shared Redis connection is closed.");
             }
         }
     }
@@ -400,8 +401,17 @@ class redis_lock_factory implements lock_factory {
      * @param $message
      */
     protected function log($message) {
+        error_log(sprintf('Redis lock; pid=%d; %s', getmypid(), $message));
+    }
+
+    /**
+     * Debug message
+     *
+     * @param $message
+     */
+    protected function debug($message) {
         if ($this->logging) {
-            mtrace(sprintf('Redis lock; pid=%d; %s', getmypid(), $message));
+            $this->log($message);
         }
     }
 
